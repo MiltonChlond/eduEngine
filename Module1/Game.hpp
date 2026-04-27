@@ -16,6 +16,18 @@ public:
     /// @return 
     bool init() override;
 
+    void CreatePlayer();
+
+    void CreateCamera();
+    bool isThirdPersonCam;
+
+    void CreateGrass();
+
+    void CreateNPC();
+    bool stopMoving;
+
+    void CreateHorse();
+
     /// @brief General update method that is called each frame
     /// @param time Total time elapsed in seconds
     /// @param deltaTime Time elapsed since the last frame

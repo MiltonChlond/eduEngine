@@ -5,6 +5,22 @@
 #include "Log.hpp"
 #include "Game.hpp"
 
+#include "TransformComponent.h"
+#include "LinearVelocityComponent.h"
+#include "MeshComponent.h"
+#include "NPCController.h"
+#include "PlayerControllerComponent.h"
+#include "CameraComponent.h"
+
+#include "RenderSystem.h"
+#include "PlayerControllerSystem.h"
+#include "PlayerRotationSystem.h"
+#include "NPCControllerSystem.h"
+#include "MovementSystem.h"
+#include "ThirdPersonCameraSystem.h"
+#include "FreeCameraSystem.h"
+#include "CameraPerspectiveSystem.h"
+
 bool Game::init()
 {
     forwardRenderer = std::make_shared<eeng::ForwardRenderer>();
@@ -15,12 +31,12 @@ bool Game::init()
 
     // Do some entt stuff
     entity_registry = std::make_shared<entt::registry>();
-    auto ent1 = entity_registry->create();
+    /*auto ent1 = entity_registry->create();
     struct Tfm
     {
         float x, y, z;
     };
-    entity_registry->emplace<Tfm>(ent1, Tfm{});
+    entity_registry->emplace<Tfm>(ent1, Tfm{});*/
 
     // Grass
     grassMesh = std::make_shared<eeng::RenderableMesh>();
@@ -79,7 +95,65 @@ bool Game::init()
         35.0f, { 0, 1, 0 },
         { 0.01f, 0.01f, 0.01f });
 
+    CreatePlayer();
+    CreateCamera();
+    CreateGrass();
+    CreateNPC();
+    CreateHorse();
+
     return true;
+}
+
+void Game::CreatePlayer()
+{
+    auto player = entity_registry->create();
+    entity_registry->emplace<TransformComponent>(player, TransformComponent{ glm::vec3{0, 0, 0},
+                                                                             glm::vec3{0, 0, 0},
+                                                                             glm::vec3{0.03f, 0.03f, 0.03f}});
+    entity_registry->emplace<MeshComponent>(player, MeshComponent{ characterMesh });
+    entity_registry->emplace<LinearVelocityComponent>(player, LinearVelocityComponent{});
+    entity_registry->emplace<PlayerControllerComponent>(player, PlayerControllerComponent{});
+}
+
+void Game::CreateCamera()
+{
+    auto camera = entity_registry->create();
+    entity_registry->emplace<CameraComponent>(camera, CameraComponent{});
+    entity_registry->emplace<TransformComponent>(camera, TransformComponent{ glm::vec3{0, 0, -2},
+                                                                             glm::vec3{0, 0, 0},
+                                                                             glm::vec3{0, 0, 0}});
+    isThirdPersonCam = true;
+}
+
+void Game::CreateGrass()
+{
+    auto grass = entity_registry->create();
+    entity_registry->emplace<TransformComponent>(grass, TransformComponent{ glm::vec3{0, 0, 0},
+                                                                             glm::vec3{0, 0, 0},
+                                                                             glm::vec3{100, 100, 100} });
+    entity_registry->emplace<MeshComponent>(grass, MeshComponent{ grassMesh });
+}
+
+void Game::CreateNPC()
+{
+    auto npc = entity_registry->create();
+    entity_registry->emplace<TransformComponent>(npc, TransformComponent{ glm::vec3{0.5f, 0.0f, 0.0f},
+                                                                          glm::vec3{0, 0, 0},
+                                                                          glm::vec3{0.03f, 0.03f, 0.03f}});
+    entity_registry->emplace<MeshComponent>(npc, MeshComponent{characterMesh});
+    entity_registry->emplace<LinearVelocityComponent>(npc, LinearVelocityComponent{});
+    entity_registry->emplace<NPCController>(npc, NPCController{});
+
+    stopMoving = false;
+}
+
+void Game::CreateHorse()
+{
+    auto horse = entity_registry->create();
+    entity_registry->emplace<TransformComponent>(horse, TransformComponent{ glm::vec3{30, 0, -35},
+                                                                          glm::vec3{0, 35, 0},
+                                                                          glm::vec3{0.01f, 0.01f, 0.01f} });
+    entity_registry->emplace<MeshComponent>(horse, MeshComponent{ horseMesh });
 }
 
 void Game::update(
@@ -87,8 +161,18 @@ void Game::update(
     float deltaTime,
     InputManagerPtr input)
 {
-    updateCamera(input);
+    //updateCamera(input);
+    //camera.lookAt = glm::vec3(0, 0, 0);
 
+    NPCContollerSystem(*entity_registry);
+    PlayerControllerSystem(*entity_registry, input);
+    PlayerRotationSystem(*entity_registry, input);
+    MovementSystem(*entity_registry, deltaTime);
+    CameraPerspectiveSystem(*entity_registry, input);
+    FreeCameraSystem(*entity_registry, input, deltaTime);
+    ThirdPersonCameraSystem(*entity_registry);
+
+#if 0
     updatePlayer(deltaTime, input);
 
     pointlight.pos = glm::vec3(
@@ -132,6 +216,7 @@ void Game::update(
             glm_aux::to_string(ray.origin).c_str(),
             glm_aux::to_string(ray.dir).c_str());
     }
+#endif
 }
 
 void Game::render(
@@ -151,8 +236,13 @@ void Game::render(
     // Viewport matrix
     matrices.VP = glm_aux::create_viewport_matrix(0.0f, 0.0f, windowWidth, windowHeight, 0.0f, 1.0f);
     // Begin rendering pass
-    forwardRenderer->beginPass(matrices.P, matrices.V, pointlight.pos, pointlight.color, camera.pos);
+    //forwardRenderer->beginPass(matrices.P, matrices.V, pointlight.pos, pointlight.color, camera.pos);
 
+    RenderSystem(*entity_registry, forwardRenderer, windowWidth, windowHeight, pointlight.pos, pointlight.color);
+    drawcallCount = 10;
+    //drawcallCount = forwardRenderer->endPass();
+
+#if 0
     // Grass
     forwardRenderer->renderMesh(grassMesh, grassWorldMatrix);
     grass_aabb = grassMesh->m_model_aabb.post_transform(grassWorldMatrix);
@@ -220,7 +310,7 @@ void Game::render(
         shapeRenderer->push_AABB(grass_aabb.min, grass_aabb.max);
         shapeRenderer->pop_states<ShapeRendering::Color4u>();
     }
-
+#endif
 #if 0
     // Demo draw other shapes
     {
@@ -292,6 +382,37 @@ void Game::renderUI()
     ImGui::Text("Walking (2) + Waving (3)");
     ImGui::Text("Branch root: mixamorig:Spine");
     ImGui::Checkbox("Spine subtree uses waving", &rightCharacterSubtreeUsesWave);
+
+    if (auto players = entity_registry->view<PlayerControllerComponent, TransformComponent>()) //if player
+    {
+        ImGui::Separator();
+        ImGui::Text("Player Entities");
+        for (auto player : players)
+        {
+            auto& playerCtrl = players.get<PlayerControllerComponent>(player);
+            ImGui::SliderFloat("Player Movement Speed", &playerCtrl.speed, 10, 100);
+
+            auto& transform = players.get<TransformComponent>(player);
+            ImGui::SliderFloat("Player Size: X", &transform.scale.x, 0.01, 1);
+            ImGui::SliderFloat("Player Size: Y", &transform.scale.y, 0.01, 1);
+            ImGui::SliderFloat("Player Size: Z", &transform.scale.z, 0.01, 1);
+        }
+    }
+
+    if (auto npcs = entity_registry->view<NPCController, TransformComponent>())
+    {
+        ImGui::Separator();
+        ImGui::Text("NPC Entities");
+        ImGui::Checkbox("Stop NPC Movement", &stopMoving);
+        for (auto npc : npcs)
+        {
+            auto& NPCContoller = npcs.get<NPCController>(npc);
+            if (stopMoving)
+                NPCContoller.isMoving = false;
+            else
+                NPCContoller.isMoving = true;
+        }
+    }
 
     ImGui::End(); // end info window
 
