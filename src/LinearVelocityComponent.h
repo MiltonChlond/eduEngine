@@ -5,4 +5,5 @@
 struct LinearVelocityComponent
 {
 	glm::vec3 velocity = {0, 0, 0};
+	float maxSpeed = 0;
 };

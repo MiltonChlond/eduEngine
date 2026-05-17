@@ -4,7 +4,9 @@
 
 struct TransformComponent
 {
-	glm::vec3 pos;
-	glm::vec3 rot;
-	glm::vec3 scale;
+	glm::vec3 pos = {0, 0, 0};
+	glm::vec3 rot = {0, 0, 0};
+	glm::vec3 scale = {1, 1, 1};
+
+	std::string name;
 };

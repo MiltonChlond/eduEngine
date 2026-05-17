@@ -7,21 +7,31 @@
 #include "ForwardRenderer.hpp"
 #include "CameraComponent.h"
 
-inline void RenderSystem(entt::registry& registry, eeng::ForwardRendererPtr& renderer, int windowWidth, int windowHeight, glm::vec3 lightPos, glm::vec3 lightColor)
+inline int RenderSystem(entt::registry& registry, eeng::ForwardRendererPtr& renderer, int windowWidth, int windowHeight, glm::vec3 lightPos, glm::vec3 lightColor)
 {
 	auto cameras = registry.view<CameraComponent, TransformComponent>();
-	if (cameras.begin() == cameras.end()) 
+	entt::entity camera;
+	bool foundCam = false;
+	for (auto cam : cameras)
 	{
-		eeng::Log("no cameras");
-		return;
+		auto& camComp = cameras.get<CameraComponent>(cam);
+		if (camComp.isActive)
+		{
+			camera = cam;
+			foundCam = true;
+			break;
+		}
+	}
+	if (!foundCam)
+	{
+		return 0;
 	}
 
-	auto camera = cameras.front();
 	auto& cameraComp = cameras.get<CameraComponent>(camera);
 	auto& cameraTran = cameras.get<TransformComponent>(camera);
 
 	const float aspectRatio = float(windowWidth) / windowHeight;
-	glm::mat4 P = glm::perspective(glm::radians(60.0f), aspectRatio, cameraComp.nearPlane, cameraComp.farPlane);
+	glm::mat4 P = glm::perspective(glm::radians(cameraComp.fov), aspectRatio, cameraComp.nearPlane, cameraComp.farPlane);
 	glm::mat4 V = glm::lookAt(cameraTran.pos, cameraComp.lookAt, cameraComp.up);
 
 	renderer->beginPass(P, V, lightPos, lightColor, cameraTran.pos);
@@ -44,5 +54,5 @@ inline void RenderSystem(entt::registry& registry, eeng::ForwardRendererPtr& ren
 		renderer->renderMesh(meshShared, matrix);
 	}
 
-	renderer->endPass();
+	return(renderer->endPass());
 }
